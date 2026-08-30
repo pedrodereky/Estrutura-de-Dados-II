@@ -1,0 +1,393 @@
+"""
+Aula 03 — Ponteiros, Referências e Estruturas Dinâmicas em Python
+Feito em conjunto João Pedro Guimarães 42108772 - Samuel Silva dos Anjos 44049901
+==================================================================
+
+Arquivo único com a resolução de TODAS as atividades da aula, organizadas
+por seção, na mesma ordem do material. Basta rodar:
+
+Cada bloco abaixo tem comentários explicando o que está sendo feito e por
+quê, incluindo os erros propositais encontrados durante a depuração.
+"""
+
+
+# ======================================================================
+# EXERCÍCIO 1 — Referências (seção 15)
+# ======================================================================
+def exercicio_1_referencias():
+    """
+    Demonstra que 'b = a' compartilha o MESMO objeto (mesmo id), e que
+    'b = a.copy()' cria um objeto novo e independente.
+    """
+    a = [10, 20, 30]
+    b = a  # b não é uma lista nova: aponta para o mesmo objeto que 'a'
+
+    b.append(40)  # como é o mesmo objeto, a mudança aparece em 'a' também
+
+    print("a:", a)
+    print("b:", b)
+    print("id(a):", id(a))
+    print("id(b):", id(b))  # -> igual a id(a), prova que é o mesmo objeto
+
+    print("\n--- Comparação: usando .copy() em vez de b = a ---")
+    c = [10, 20, 30]
+    d = c.copy()  # cria um NOVO objeto (cópia rasa), com id diferente
+    d.append(40)
+
+    print("c:", c)  # não muda, pois d é independente de c
+    print("d:", d)
+    print("id(c):", id(c))
+    print("id(d):", id(d))  # -> diferente de id(c)
+
+
+# ======================================================================
+# EXERCÍCIO 2 — Construindo uma cadeia A -> B -> C (seção 16)
+# ======================================================================
+def exercicio_2_cadeia():
+    """Cria três nós, conecta A->B->C->None e percorre a cadeia."""
+
+    class Node:
+        def __init__(self, valor):
+            self.valor = valor
+            self.proximo = None  # referência para o próximo nó (ou None)
+
+    n1 = Node("A")
+    n2 = Node("B")
+    n3 = Node("C")
+
+    n1.proximo = n2  # A aponta para B
+    n2.proximo = n3  # B aponta para C
+    # n3.proximo continua None -> fim da cadeia
+
+    # Percorre a cadeia a partir do início, seguindo as referências
+    atual = n1
+    while atual is not None:
+        print(atual.valor)
+        atual = atual.proximo
+
+
+# ======================================================================
+# EXERCÍCIO 3 — Depuração (seção 17)
+# ======================================================================
+def exercicio_3_debug():
+    """
+    O código do enunciado tem este bug (reproduzido aqui só como
+    referência em texto, NÃO executado, porque entra em loop infinito):
+
+        atual = n1
+        while atual is not None:
+            print(atual.valor)
+            # falta: atual = atual.proximo  <- BUG
+
+    Isso já foi comprovado à parte com o comando:
+        timeout 1 python3 exercicio3_bugado.py | wc -l
+    e o resultado foi 353.757 linhas de "10" impressas em 1 segundo,
+    antes do processo ser interrompido à força — ou seja, sem a correção
+    o laço realmente nunca terminaria sozinho.
+
+    Abaixo está apenas a versão CORRIGIDA, com a linha que faltava.
+    """
+
+    class Node:
+        def __init__(self, valor):
+            self.valor = valor
+            self.proximo = None
+
+    n1 = Node(10)
+    n2 = Node(20)
+    n3 = Node(30)
+
+    n1.proximo = n2
+    n2.proximo = n3
+
+    atual = n1
+    while atual is not None:
+        print(atual.valor)
+        atual = atual.proximo  # <- linha que faltava no código com bug
+
+
+# ======================================================================
+# PROBLEMA REAL — Sistema de atendimento da clínica (seções 18 a 23)
+# ======================================================================
+class Paciente:
+    """Guarda os dados de um paciente: nome, idade e prioridade."""
+
+    def __init__(self, nome, idade, prioridade):
+        self.nome = nome
+        self.idade = idade
+        self.prioridade = prioridade  # "Normal" ou "Prioridade"
+
+    def __str__(self):
+        return f"{self.nome} — {self.idade} anos — {self.prioridade}"
+
+
+class Node:
+    """Nó da fila: guarda um paciente e a referência para o próximo nó."""
+
+    def __init__(self, paciente):
+        self.paciente = paciente
+        self.proximo = None
+
+
+class FilaAtendimento:
+    """
+    Fila encadeada com início e fim.
+    Pacientes normais entram no fim (FIFO). Pacientes com prioridade
+    "furam a fila", mas só até o último prioritário já presente —
+    ou seja, mantêm a ordem de chegada dentro do próprio grupo
+    (seção 23, desafio de atendimento prioritário).
+    """
+
+    def __init__(self):
+        self.inicio = None
+        self.fim = None
+        self._tamanho = 0
+
+    def esta_vazia(self):
+        return self.inicio is None
+
+    def tamanho(self):
+        return self._tamanho
+
+    def adicionar(self, paciente):
+        novo = Node(paciente)
+
+        if self.inicio is None:
+            # Fila vazia: o novo nó é ao mesmo tempo início e fim.
+            self.inicio = novo
+            self.fim = novo
+
+        elif paciente.prioridade == "Prioridade":
+            if self.inicio.paciente.prioridade != "Prioridade":
+                # Não há nenhum prioritário na frente -> vai para o início.
+                novo.proximo = self.inicio
+                self.inicio = novo
+            else:
+                # Anda até o último prioritário em sequência, para inserir
+                # logo depois dele (preservando ordem de chegada entre
+                # prioritários) e antes do primeiro paciente normal.
+                atual = self.inicio
+                while (atual.proximo is not None
+                       and atual.proximo.paciente.prioridade == "Prioridade"):
+                    atual = atual.proximo
+                novo.proximo = atual.proximo
+                atual.proximo = novo
+                if novo.proximo is None:
+                    self.fim = novo
+
+        else:
+            # Paciente normal: sempre vai para o fim da fila.
+            self.fim.proximo = novo
+            self.fim = novo
+
+        self._tamanho += 1
+
+    def atender(self):
+        """Remove e retorna o paciente do início da fila (FIFO)."""
+        if self.esta_vazia():
+            return None
+
+        paciente = self.inicio.paciente
+        self.inicio = self.inicio.proximo
+        if self.inicio is None:
+            # A fila ficou vazia -> 'fim' também precisa voltar a None.
+            # (esquecer esta linha foi exatamente o bug da seção de revisão)
+            self.fim = None
+        self._tamanho -= 1
+        return paciente
+
+    def listar(self):
+        """Imprime os pacientes na ordem em que serão atendidos."""
+        if self.esta_vazia():
+            print("(fila vazia)")
+            return
+        atual = self.inicio
+        while atual is not None:
+            print(atual.paciente)
+            atual = atual.proximo
+
+
+def demo_sistema_atendimento():
+    print("--- Seção 22: uso básico ---")
+    fila = FilaAtendimento()
+    fila.adicionar(Paciente("Ana", 32, "Normal"))
+    fila.adicionar(Paciente("Bruno", 70, "Prioridade"))
+    fila.adicionar(Paciente("Carlos", 45, "Normal"))
+
+    fila.listar()
+
+    paciente = fila.atender()
+    print("Atendendo:", paciente.nome)
+
+    print("\n--- Seção 23: desafio de atendimento prioritário ---")
+    fila2 = FilaAtendimento()
+    fila2.adicionar(Paciente("Ana", 30, "Normal"))
+    fila2.adicionar(Paciente("Bruno", 40, "Normal"))
+    fila2.adicionar(Paciente("Carlos", 50, "Prioridade"))
+
+    print("Fila resultante (ordem de atendimento):")
+    fila2.listar()
+
+    print("\nOrdem real ao chamar atender() sucessivamente:")
+    ordem = []
+    while not fila2.esta_vazia():
+        ordem.append(fila2.atender().nome)
+    print(" -> ".join(ordem))  # esperado: Carlos -> Ana -> Bruno
+
+
+# ======================================================================
+# EXERCÍCIO DE REVISÃO (seção 25)
+# Erro real encontrado + versão final testada com 5 pacientes
+# ======================================================================
+class FilaAtendimentoBugada:
+    """
+    Versão com o erro proposital (mantida só para fins de demonstração).
+
+    Roteiro de depuração da seção 14 aplicado a este bug:
+      1) Qual variável está incorreta?   -> self.fim, em atender()
+      2) Qual é o valor dela?             -> continua apontando para o nó
+                                              já removido, em vez de None
+      3) Qual objeto ela referencia?      -> um nó fora da fila
+      4) Essa referência deveria mudar?   -> sim, quando a fila esvazia
+      5) Condição que resolve o problema? -> resetar self.fim quando
+                                              self.inicio virar None
+    """
+
+    def __init__(self):
+        self.inicio = None
+        self.fim = None
+        self._tamanho = 0
+
+    def esta_vazia(self):
+        return self.inicio is None
+
+    def tamanho(self):
+        return self._tamanho
+
+    def adicionar(self, paciente):
+        novo = Node(paciente)
+        if self.fim is None:          # BUG: deveria checar self.inicio
+            self.inicio = novo
+            self.fim = novo
+        else:
+            self.fim.proximo = novo
+            self.fim = novo
+        self._tamanho += 1
+
+    def atender(self):
+        if self.esta_vazia():
+            return None
+        paciente = self.inicio.paciente
+        self.inicio = self.inicio.proximo
+        # BUG: falta resetar self.fim quando a fila esvazia aqui
+        self._tamanho -= 1
+        return paciente
+
+    def listar(self):
+        if self.esta_vazia():
+            print("(fila vazia)")
+            return
+        atual = self.inicio
+        while atual is not None:
+            print(atual.paciente)
+            atual = atual.proximo
+
+
+def demonstrar_bug():
+    print("--- Reproduzindo o erro real ---")
+    fila = FilaAtendimentoBugada()
+    fila.adicionar(Paciente("Ana", 32, "Normal"))
+    fila.atender()  # esvazia a fila, mas self.fim fica "preso" no nó antigo
+    fila.adicionar(Paciente("Bruno", 45, "Normal"))
+
+    print("tamanho():", fila.tamanho())        # mostra 1
+    print("esta_vazia():", fila.esta_vazia())  # mostra True -> inconsistente!
+    print("listar():")
+    fila.listar()  # imprime "(fila vazia)" mesmo com tamanho() == 1
+    print(">> tamanho diz 1, mas a fila 'parece' vazia: bug confirmado.\n")
+
+
+def testar_versao_corrigida():
+    print("--- Versão corrigida, testada com 5 pacientes ---")
+    fila = FilaAtendimento()
+
+    print("Fila recém-criada. Vazia?", fila.esta_vazia(), "| tamanho:", fila.tamanho())
+
+    fila.adicionar(Paciente("Ana", 32, "Normal"))
+    print("Após 1 paciente. Vazia?", fila.esta_vazia(), "| tamanho:", fila.tamanho())
+
+    fila.adicionar(Paciente("Bruno", 70, "Prioridade"))
+    fila.adicionar(Paciente("Carlos", 45, "Normal"))
+    fila.adicionar(Paciente("Diana", 8, "Prioridade"))
+    fila.adicionar(Paciente("Eduardo", 50, "Normal"))
+
+    print("\nFila com 5 pacientes (ordem de atendimento):")
+    fila.listar()
+    print("tamanho:", fila.tamanho())
+
+    print("\nAtendendo todos, um a um:")
+    while not fila.esta_vazia():
+        p = fila.atender()
+        print("Atendendo:", p.nome, "| restam:", fila.tamanho())
+
+    print("\nFila esvaziada. Vazia?", fila.esta_vazia(), "| tamanho:", fila.tamanho())
+
+    print("\nRepetindo o cenário do bug (adicionar após esvaziar):")
+    fila.adicionar(Paciente("Fernanda", 28, "Normal"))
+    print("tamanho():", fila.tamanho())
+    print("esta_vazia():", fila.esta_vazia())
+    fila.listar()  # agora mostra Fernanda corretamente
+
+
+# ======================================================================
+# RESPOSTAS ESCRITAS (seções 15, 17, 24 e 27)
+# ======================================================================
+#
+# Exercício 1 (seção 15):
+#   1) Saída: a e b ficam iguais a [10, 20, 30, 40]; id(a) == id(b).
+#   2) Sim, são o mesmo objeto.
+#   3) Porque 'b = a' só copia a referência, não cria uma lista nova.
+#   4) Com b = a.copy(), b vira um objeto novo e independente de a.
+#
+# Exercício 3 (seção 17):
+#   1) Falta 'atual = atual.proximo' dentro do while.
+#   2) Sem isso, 'atual' nunca muda e a condição nunca vira falsa.
+#   3) A linha 'atual = atual.proximo', ao final do laço.
+#   4) Saída após a correção: 10, 20, 30.
+#
+# Seção 24 (trabalho colaborativo):
+#   Etapas 1-3 (modelar/implementar/testar) resolvidas acima em
+#   FilaAtendimento. A etapa 4 (achar e corrigir um erro proposital) foi
+#   feita de verdade em FilaAtendimentoBugada / demonstrar_bug().
+#
+# Reflexão final (seção 27):
+#   - Referência: nome associado a um objeto na memória; não é o dado em
+#     si, é o "endereço" que aponta para ele.
+#   - b = a vs b = a.copy(): a primeira compartilha o mesmo objeto; a
+#     segunda cria um objeto novo e independente.
+#   - Por que listas encadeadas precisam de referências: a ligação entre
+#     nós não é física (não são posições vizinhas de memória) — é a
+#     referência guardada em 'proximo' que conecta um nó ao outro.
+#   - Erros encontrados: o loop infinito do exercício 3 e a
+#     inconsistência entre self.inicio/self.fim na fila da revisão.
+#   - Referências e estruturas dinâmicas: inserir/remover se resume a
+#     atualizar referências entre nós, não a mover dados; um bug quase
+#     sempre é uma referência que não foi atualizada no momento certo.
+
+
+if __name__ == "__main__":
+    print("=== Exercício 1 — Referências (seção 15) ===")
+    exercicio_1_referencias()
+
+    print("\n=== Exercício 2 — Construindo uma cadeia (seção 16) ===")
+    exercicio_2_cadeia()
+
+    print("\n=== Exercício 3 — Depuração (seção 17) ===")
+    exercicio_3_debug()
+
+    print("\n=== Sistema de atendimento da clínica (seções 18-23) ===")
+    demo_sistema_atendimento()
+
+    print("\n=== Exercício de revisão (seção 25) ===")
+    demonstrar_bug()
+    testar_versao_corrigida()
